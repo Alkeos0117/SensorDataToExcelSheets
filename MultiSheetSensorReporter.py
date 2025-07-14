@@ -35,6 +35,7 @@ def select_data_file():
         ext = os.path.splitext(data_file)[1].lower()
         try:
             df = pd.read_csv(data_file) if ext == ".csv" else pd.read_excel(data_file)
+            print("📋 Column names detected:", df.columns.tolist())
             status_label["text"] = f"✅ Data loaded: {os.path.basename(data_file)}"
         except Exception as e:
             messagebox.showerror("Error", f"Could not load data file:\n{e}")
@@ -49,14 +50,18 @@ def process_and_save():
         return
 
     base_name = template_sheet.title
+    created_sheets = []
 
     for index, row in df.iterrows():
         try:
-            sn = str(row['S/N'])
+            if not all(k in row for k in ['S/N', '0bar', '20bar', '40bar', 'I-Widerstand']):
+                raise KeyError("Missing one or more required columns in the data file.")
+
+            sn = str(row['S/N']).strip()
             val_0 = float(row['0bar'])
             val_20 = float(row['20bar'])
             val_40 = float(row['40bar'])
-            resistance = str(row['I-Widerstand'])
+            resistance = str(row['I-Widerstand']).strip()
 
             sheet = wb.copy_worksheet(template_sheet)
             sheet.title = sn
@@ -74,11 +79,14 @@ def process_and_save():
             sheet["A15"] = "=B8+(B10/2)"
             sheet["A16"] = "=B9"
 
+            created_sheets.append(sheet)
+
         except Exception as e:
             print(f"❌ Error in row {index}: {e}")
 
-    # Remove the original template sheet
-    wb.remove(wb[base_name])
+    # Remove the original template sheet only if others exist
+    if base_name in wb.sheetnames and len(wb.sheetnames) > 1:
+        wb.remove(wb[base_name])
 
     # Save final output
     output_file = filedialog.asksaveasfilename(
@@ -96,7 +104,7 @@ def process_and_save():
 
 # GUI
 root = tk.Tk()
-root.title("Excel Report Generator")
+root.title("Sensor Report Generator")
 root.geometry("520x300")
 
 tk.Label(root, text="Step 1: Select Excel Template (.xlsx)", font=("Arial", 10)).pack(pady=5)
